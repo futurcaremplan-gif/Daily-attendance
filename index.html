@@ -3,6 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#17483d">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
 <title>FutureCare | Employee Attendance</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
@@ -102,7 +105,7 @@ table{border-collapse:collapse;width:100%;font-size:13px;min-width:760px}th,td{p
 
   <section class="panel">
    <div class="sectionhead"><div><h2 style="font-size:18px;margin:0">Attendance Records</h2><p class="note" id="recordsAccessNote">View attendance records.</p></div><div class="actions" style="margin:0"><button class="secondary" id="csvBtn">Download CSV</button></div></div>
-   <div class="tablewrap" style="margin-top:12px"><table><thead><tr><th>Employee</th><th>Date</th><th>Time in</th><th>Time out</th><th>Break</th><th>Duty hours</th><th>Viewing</th><th>Allowance</th><th>Estimated pay</th><th>Remarks</th><th></th></tr></thead><tbody id="records"><tr><td colspan="11">Loading records…</td></tr></tbody></table></div>
+   <div class="tablewrap" style="margin-top:12px"><table><thead><tr><th>Employee</th><th>Date</th><th>Time in</th><th>Time out</th><th>Break</th><th>Duty hours</th><th>Viewing</th><th>Allowance</th><th>Estimated pay</th><th>Remarks</th><th>Actions</th></tr></thead><tbody id="records"><tr><td colspan="11">Loading records…</td></tr></tbody></table></div>
   </section>
   <div id="appStatus" class="status hidden"></div>
  </section>
@@ -273,6 +276,12 @@ $('csvBtn').onclick=()=>{
  const {data:{session}}=await db.auth.getSession();
  if(session){currentUser=session.user;try{await refreshProfileAndApp()}catch(e){showStatus('loginStatus',e.message)}}
 })();
+</script>
+
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => { navigator.serviceWorker.register('./sw.js').catch(err => console.error('Service worker registration failed:', err)); });
+}
 </script>
 </body>
 </html>
