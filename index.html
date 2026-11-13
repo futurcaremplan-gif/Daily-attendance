@@ -4,8 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#17483d">
-<link rel="manifest" href="manifest.webmanifest">
-<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="manifest" href="./manifest.webmanifest">
 <title>FutureCare | Employee Attendance</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
@@ -82,14 +81,14 @@ table{border-collapse:collapse;width:100%;font-size:13px;min-width:760px}th,td{p
    <h2 id="entryTitle" style="font-size:18px;margin:0 0 15px">Add Attendance</h2>
    <div class="grid">
     <div><label>Date</label><input id="date" type="date"></div>
-    <div><label>Time in</label><input id="tin" type="time"></div>
-    <div><label>Time out</label><input id="tout" type="time"></div>
+    <div><label>Time in</label><input id="tin" type="time"><button class="secondary" type="button" id="phoneTimeInBtn" style="margin-top:7px;width:100%">Use phone time for Time In</button></div>
+    <div><label>Time out</label><input id="tout" type="time"><button class="secondary" type="button" id="phoneTimeOutBtn" style="margin-top:7px;width:100%">Use phone time for Time Out</button></div>
     <div><label>Unpaid break (minutes)</label><input id="break" type="number" min="0" value="0"></div>
    </div>
    <label class="checkrow"><input id="viewing" type="checkbox"> Last-night viewing (adds ₱300 for this viewing)</label>
    <div style="margin-top:12px"><label>Remarks (optional)</label><input id="remarks" placeholder="e.g. Regular duty, half-day"></div>
    <div class="actions"><button class="primary" id="saveBtn">Save attendance</button><button class="secondary" id="clearBtn">Clear fields</button><button class="secondary hidden" id="cancelEditBtn">Cancel edit</button></div>
-   <p class="note">Enter the duty date and times. Unpaid breaks are deducted. Overnight shifts are supported. Every attendance record marked as a last-night viewing adds ₱300 once.</p>
+   <p class="note">Tap the phone-time buttons to fill the current time from this phone. Basic pay is capped at 5:00 PM on last-night viewing days, and 7:00 PM on regular days. If the employee clocks out earlier, only actual hours worked are paid. Unpaid breaks are deducted. Every attendance record marked as a last-night viewing adds ₱300 once.</p>
   </section>
 
   <section class="panel">
@@ -100,7 +99,7 @@ table{border-collapse:collapse;width:100%;font-size:13px;min-width:760px}th,td{p
     <div class="metric"><small>Viewing allowance</small><strong id="sumAllowance">₱0.00</strong></div>
     <div class="metric"><small>Estimated total pay</small><strong id="sumPay">₱0.00</strong></div>
    </div>
-   <p class="note">Basic pay = approved duty hours ÷ 8 × ₱350. Viewing allowance = number of viewing records × ₱300. This is an estimate; review any other applicable pay rules or deductions separately.</p>
+   <p class="note">Basic pay = paid duty hours ÷ 8 × ₱350. Paid time ends at 5:00 PM on last-night viewing days or 7:00 PM on regular days (or the actual earlier Time Out). Viewing allowance = number of viewing records × ₱300.</p>
   </section>
 
   <section class="panel">
@@ -130,6 +129,20 @@ function calcHours(a,b,br){
  let start=h1*60+m1,end=h2*60+m2;if(end<start)end+=1440;
  return Math.max(0,(end-start-Math.max(0,Number(br)||0))/60);
 }
+function calcPaidHours(a,b,br,viewing){
+ if(!a||!b)return 0;
+ let [h1,m1]=a.split(':').map(Number),[h2,m2]=b.split(':').map(Number);
+ const start=h1*60+m1;
+ let end=h2*60+m2;
+ if(end<start)end+=1440;
+ const cutoff=viewing?17*60:19*60;
+ const paidEnd=Math.min(end,cutoff);
+ return Math.max(0,(paidEnd-start-Math.max(0,Number(br)||0))/60);
+}
+function phoneTimeValue(){
+ const now=new Date();
+ return String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
+}
 function timeOnly(v){
  if(!v)return '';
  const d=new Date(v);
@@ -138,7 +151,8 @@ function timeOnly(v){
 }
 function mapRecord(x){
  const tin=timeOnly(x.time_in),tout=timeOnly(x.time_out),br=Number(x.unpaid_break_minutes||0);
- return {id:x.id,employee_id:x.employee_id,date:x.work_date,tin,tout,br,hours:calcHours(tin,tout,br),viewing:!!x.last_night_viewing,status:x.status||'present',remarks:x.remarks||''};
+ const viewing=!!x.last_night_viewing;
+ return {id:x.id,employee_id:x.employee_id,date:x.work_date,tin,tout,br,hours:calcPaidHours(tin,tout,br,viewing),viewing,status:x.status||'present',remarks:x.remarks||''};
 }
 function phTimestamp(date,time,addDay=false){
  const [y,m,d]=date.split('-').map(Number);
@@ -209,10 +223,12 @@ $('loginBtn').onclick=async()=>{
  finally{$('loginBtn').disabled=false}
 };
 $('logoutBtn').onclick=async()=>{await db.auth.signOut();currentUser=null;currentProfile=null;data=[];$('appPanel').classList.add('hidden');$('loginPanel').classList.remove('hidden')};
+$('phoneTimeInBtn').onclick=()=>{$('tin').value=phoneTimeValue();showStatus('appStatus','Time In filled using this phone’s current time.');};
+$('phoneTimeOutBtn').onclick=()=>{$('tout').value=phoneTimeValue();showStatus('appStatus','Time Out filled using this phone’s current time.');};
 $('saveBtn').onclick=async()=>{
  const date=$('date').value,tin=$('tin').value,tout=$('tout').value,br=Number($('break').value||0);
  if(!date||!tin||!tout){showStatus('appStatus','Please enter the date, time in, and time out.');return}
- if(calcHours(tin,tout,br)<=0){showStatus('appStatus','Please check the time entries and break minutes.');return}
+ if(calcHours(tin,tout,0)<=0){showStatus('appStatus','Please check the time entries. Time Out must be later than Time In.');return}
  const isEdit=!!editingRecordId;
  if(isEdit&&currentProfile?.role!=='owner'){showStatus('appStatus','Only the Owner can edit existing records.');return}
  if(!isEdit&&currentProfile?.role!=='secretary'){showStatus('appStatus','Only the Secretary can add attendance entries.');return}
@@ -276,12 +292,7 @@ $('csvBtn').onclick=()=>{
  const {data:{session}}=await db.auth.getSession();
  if(session){currentUser=session.user;try{await refreshProfileAndApp()}catch(e){showStatus('loginStatus',e.message)}}
 })();
-</script>
-
-<script>
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => { navigator.serviceWorker.register('./sw.js').catch(err => console.error('Service worker registration failed:', err)); });
-}
+if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(err=>console.warn('Service worker registration failed:',err)));}
 </script>
 </body>
 </html>
